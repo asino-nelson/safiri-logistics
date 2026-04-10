@@ -5,9 +5,11 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 
 	"github.com/asino-nelson/safiri-logistics/internal/database"
+	"github.com/asino-nelson/safiri-logistics/internal/user"
 )
 
 func main() {
@@ -20,15 +22,29 @@ func main() {
 	// Connect DB
 	database.ConnectDB()
 
-	row := database.DB.QueryRow(context.Background(), "SELECT NOW()")
+	repo := user.NewRepository(database.DB)
 
-	var timeNow string
-	err = row.Scan(&timeNow)
+	u := &user.User{
+		ID:           uuid.New().String(),
+		Name:         "Nelson",
+		Email:        "nelson@test.com",
+		PasswordHash: "hashedpassword",
+		Role:         "customer",
+	}
+
+	err = repo.CreateUser(context.Background(), u)
+	if err != nil {
+		log.Fatal("Error creating user:", err)
+	}
+
+	log.Println("✅ User created")
+
+	foundUser, err := repo.GetUserByEmail(context.Background(), "nelson@test.com")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println("DB Time:", timeNow)
+	log.Println("Fetched user:", foundUser.Email)
 
 	router := gin.Default()
 
