@@ -3,54 +3,61 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 
+	"github.com/asino-nelson/safiri-logistics/internal/config"
 	"github.com/asino-nelson/safiri-logistics/internal/database"
-	"github.com/asino-nelson/safiri-logistics/internal/user"
 )
 
 func main() {
-	// Load .env
-	err := godotenv.Load()
-	if err != nil {
+	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
 	}
 
-	// Connect DB
-	database.ConnectDB()
-
-	repo := user.NewRepository(database.DB)
-
-	u := &user.User{
-		ID:           uuid.New().String(),
-		Name:         "Nelson",
-		Email:        "nelson@test.com",
-		PasswordHash: "hashedpassword",
-		Role:         "customer",
-	}
-
-	err = repo.CreateUser(context.Background(), u)
-	if err != nil {
-		log.Fatal("Error creating user:", err)
-	}
-
-	log.Println("✅ User created")
-
-	foundUser, err := repo.GetUserByEmail(context.Background(), "nelson@test.com")
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println("Fetched user:", foundUser.Email)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	router := gin.Default()
+	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pool.Close()
 
+	router := gin.New()
+	router.Use(gin.Logger(), gin.Recovery())
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	router.Run(":8080")
+	server := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		<-ctx.Done()
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("server shutdown error: %v", err)
+		}
+	}()
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
 }

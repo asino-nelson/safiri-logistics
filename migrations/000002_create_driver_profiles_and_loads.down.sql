@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS loads;
+DROP TABLE IF EXISTS driver_profiles;
