@@ -18,6 +18,7 @@ import (
 	"github.com/asino-nelson/safiri-logistics/internal/driver"
 	"github.com/asino-nelson/safiri-logistics/internal/middleware"
 	"github.com/asino-nelson/safiri-logistics/internal/order"
+	"github.com/asino-nelson/safiri-logistics/internal/tracking"
 	"github.com/asino-nelson/safiri-logistics/internal/user"
 )
 
@@ -53,6 +54,9 @@ func main() {
 	dispatchHandler := dispatch.NewHandler(dispatchService)
 	loadService := order.NewService(loadRepository, driverService, dispatchService)
 	loadHandler := order.NewHandler(loadService)
+	trackingRepository := tracking.NewRepository(pool)
+	trackingService := tracking.NewService(trackingRepository, loadRepository, nil)
+	trackingHandler := tracking.NewHandler(trackingService)
 	authMiddleware := middleware.Authenticate(tokenManager)
 
 	router := gin.New()
@@ -66,6 +70,7 @@ func main() {
 	dispatchHandler.RegisterRoutes(api, authMiddleware)
 	driverHandler.RegisterRoutes(api, authMiddleware)
 	loadHandler.RegisterRoutes(api, authMiddleware)
+	trackingHandler.RegisterRoutes(api, authMiddleware)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
