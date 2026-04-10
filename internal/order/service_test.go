@@ -4,47 +4,66 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/asino-nelson/safiri-logistics/internal/user"
 )
 
-func TestCreateLoadAllowsCustomer(t *testing.T) {
+func TestCreateLoadAllowsCustomerAndAutoMatches(t *testing.T) {
 	t.Parallel()
 
 	repo := &stubRepository{}
-	service := NewService(repo, nil)
+	matcher := &stubMatcher{matched: true}
+	service := NewService(repo, nil, matcher)
 
+	now := time.Date(2026, 4, 11, 8, 0, 0, 0, time.UTC)
 	load, err := service.CreateLoad(context.Background(), "customer-1", user.RoleCustomer, CreateLoadRequest{
-		Title:       "Fresh produce",
-		Description: "Vegetables headed to Nairobi",
-		Origin:      "Eldoret",
-		Destination: "Nairobi",
-		WeightKG:    1200,
+		Title:            "Excavator",
+		Description:      "Heavy machinery heading to Nairobi",
+		Origin:           "Mombasa",
+		Destination:      "Nairobi",
+		WeightKG:         12000,
+		PickupLatitude:   -4.043477,
+		PickupLongitude:  39.668206,
+		DropoffLatitude:  -1.286389,
+		DropoffLongitude: 36.817223,
+		PickupAt:         &now,
+		Priority:         5,
+		EquipmentType:    "lowbed",
+		CargoType:        "machinery",
 	})
 	if err != nil {
 		t.Fatalf("create load returned error: %v", err)
 	}
 
-	if load.Status != StatusPosted {
-		t.Fatalf("expected posted status, got %s", load.Status)
+	if matcher.lastLoadID == "" {
+		t.Fatal("expected auto matcher to run")
 	}
 
 	if repo.created == nil || repo.created.PosterID != "customer-1" {
 		t.Fatal("expected repository to receive posted load")
+	}
+
+	if load.Priority != 5 || load.EquipmentType != "lowbed" {
+		t.Fatalf("unexpected load payload: %+v", load)
 	}
 }
 
 func TestCreateLoadRejectsDriver(t *testing.T) {
 	t.Parallel()
 
-	service := NewService(&stubRepository{}, nil)
+	service := NewService(&stubRepository{}, nil, nil)
 
 	_, err := service.CreateLoad(context.Background(), "driver-1", user.RoleDriver, CreateLoadRequest{
-		Title:       "Steel bars",
-		Description: "Construction materials",
-		Origin:      "Mombasa",
-		Destination: "Kisumu",
-		WeightKG:    2200,
+		Title:            "Steel bars",
+		Description:      "Construction materials",
+		Origin:           "Mombasa",
+		Destination:      "Kisumu",
+		WeightKG:         2200,
+		PickupLatitude:   -4.043477,
+		PickupLongitude:  39.668206,
+		DropoffLatitude:  -0.091702,
+		DropoffLongitude: 34.767956,
 	})
 	if !errors.Is(err, ErrOnlyCustomersCanPostLoads) {
 		t.Fatalf("expected customer-only error, got %v", err)
@@ -58,7 +77,8 @@ func TestListLoadsUsesRoleAwareFiltering(t *testing.T) {
 		posterLoads: []Load{{ID: "own-load"}},
 		allLoads:    []Load{{ID: "open-load"}, {ID: "own-load"}},
 	}
-	service := NewService(repo, nil)
+	service := NewService(repo, nil, nil)
+
 	customerLoads, err := service.ListLoads(context.Background(), "customer-1", user.RoleCustomer)
 	if err != nil {
 		t.Fatalf("list customer loads: %v", err)
@@ -89,11 +109,32 @@ func TestPickLoadRequiresApprovedKYC(t *testing.T) {
 		},
 	}
 
-	service := NewService(repo, stubKYCVerifier{approved: false})
+	service := NewService(repo, stubKYCVerifier{approved: false}, nil)
 
 	_, err := service.PickLoad(context.Background(), "driver-1", user.RoleDriver, "load-1")
 	if !errors.Is(err, ErrDriverKYCRequired) {
 		t.Fatalf("expected kyc requirement error, got %v", err)
+	}
+}
+
+func TestPickMatchedLoadOnlyAllowsAssignedDriver(t *testing.T) {
+	t.Parallel()
+
+	assignedDriver := "driver-1"
+	repo := &stubRepository{
+		load: &Load{
+			ID:               "load-1",
+			PosterID:         "customer-1",
+			Status:           StatusMatched,
+			AssignedDriverID: &assignedDriver,
+		},
+	}
+
+	service := NewService(repo, stubKYCVerifier{approved: true}, nil)
+
+	_, err := service.PickLoad(context.Background(), "driver-2", user.RoleDriver, "load-1")
+	if !errors.Is(err, ErrLoadNotAvailable) {
+		t.Fatalf("expected load not available error, got %v", err)
 	}
 }
 
@@ -108,7 +149,7 @@ func TestPickLoadAndProgressDelivery(t *testing.T) {
 		},
 	}
 
-	service := NewService(repo, stubKYCVerifier{approved: true})
+	service := NewService(repo, stubKYCVerifier{approved: true}, nil)
 
 	picked, err := service.PickLoad(context.Background(), "driver-1", user.RoleDriver, "load-1")
 	if err != nil {
@@ -148,6 +189,9 @@ type stubRepository struct {
 func (r *stubRepository) Create(_ context.Context, load *Load) error {
 	clone := *load
 	r.created = &clone
+	if r.load == nil {
+		r.load = &clone
+	}
 	return nil
 }
 
@@ -157,6 +201,10 @@ func (r *stubRepository) ListByPosterID(_ context.Context, _ string) ([]Load, er
 
 func (r *stubRepository) ListAll(_ context.Context) ([]Load, error) {
 	return append([]Load(nil), r.allLoads...), nil
+}
+
+func (r *stubRepository) ListUnassignedByPickupWindow(_ context.Context, _, _ time.Time) ([]Load, error) {
+	return nil, nil
 }
 
 func (r *stubRepository) GetByID(_ context.Context, _ string) (*Load, error) {
@@ -180,4 +228,14 @@ type stubKYCVerifier struct {
 
 func (s stubKYCVerifier) IsApproved(_ context.Context, _ string) (bool, error) {
 	return s.approved, nil
+}
+
+type stubMatcher struct {
+	matched    bool
+	lastLoadID string
+}
+
+func (s *stubMatcher) MatchLoad(_ context.Context, loadID, _ string) (bool, error) {
+	s.lastLoadID = loadID
+	return s.matched, nil
 }

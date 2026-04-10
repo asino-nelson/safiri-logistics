@@ -9,10 +9,13 @@ import (
 	"github.com/asino-nelson/safiri-logistics/internal/user"
 )
 
+const defaultEquipmentType = "flatbed"
+
 var (
-	ErrOnlyDriversCanSubmitKYC = errors.New("only drivers can submit kyc")
-	ErrOnlyAdminsCanReviewKYC  = errors.New("only admins can review driver kyc")
-	ErrInvalidKYCStatus        = errors.New("invalid kyc status")
+	ErrOnlyDriversCanSubmitKYC        = errors.New("only drivers can submit kyc")
+	ErrOnlyAdminsCanReviewKYC         = errors.New("only admins can review driver kyc")
+	ErrInvalidKYCStatus               = errors.New("invalid kyc status")
+	ErrOnlyDriversCanUpdateOperations = errors.New("only drivers can update operations")
 )
 
 type Service struct {
@@ -39,6 +42,8 @@ func (s *Service) SubmitKYC(ctx context.Context, actorID, actorRole string, inpu
 		TruckRegistration: strings.TrimSpace(input.TruckRegistration),
 		Status:            KYCStatusPending,
 		SubmittedAt:       s.nowFunc().UTC(),
+		EquipmentType:     defaultEquipmentType,
+		IsAvailable:       true,
 	}
 
 	if err := s.repo.Upsert(ctx, profile); err != nil {
@@ -83,6 +88,35 @@ func (s *Service) ReviewKYC(ctx context.Context, actorRole, driverUserID string,
 	return profile, nil
 }
 
+func (s *Service) UpdateOperations(ctx context.Context, actorID, actorRole string, input UpdateOperationsRequest) (*Profile, error) {
+	if actorRole != user.RoleDriver {
+		return nil, ErrOnlyDriversCanUpdateOperations
+	}
+
+	profile, err := s.repo.GetByUserID(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+
+	profile.YearsExperience = input.YearsExperience
+	profile.MaxLoadKG = input.MaxLoadKG
+	profile.EquipmentType = normalizeEquipmentType(input.EquipmentType)
+	profile.IsOnline = input.IsOnline
+	profile.IsAvailable = input.IsAvailable
+	profile.CurrentLatitude = input.Latitude
+	profile.CurrentLongitude = input.Longitude
+	if input.Latitude != nil && input.Longitude != nil {
+		now := s.nowFunc().UTC()
+		profile.LastLocationAt = &now
+	}
+
+	if err := s.repo.Upsert(ctx, profile); err != nil {
+		return nil, err
+	}
+
+	return profile, nil
+}
+
 func (s *Service) GetProfile(ctx context.Context, userID string) (*Profile, error) {
 	return s.repo.GetByUserID(ctx, userID)
 }
@@ -98,4 +132,17 @@ func (s *Service) IsApproved(ctx context.Context, userID string) (bool, error) {
 	}
 
 	return profile.Status == KYCStatusApproved, nil
+}
+
+func (s *Service) ListOperationalDrivers(ctx context.Context) ([]Profile, error) {
+	return s.repo.ListAvailableApproved(ctx)
+}
+
+func normalizeEquipmentType(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return defaultEquipmentType
+	}
+
+	return normalized
 }

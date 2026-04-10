@@ -23,6 +23,7 @@ func (h *Handler) RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.Han
 	drivers.POST("/kyc", h.submitKYC)
 	drivers.GET("/kyc/me", h.getMyProfile)
 	drivers.PATCH("/:userID/kyc/review", h.reviewKYC)
+	drivers.PATCH("/me/operations", h.updateOperations)
 }
 
 func (h *Handler) submitKYC(c *gin.Context) {
@@ -79,6 +80,29 @@ func (h *Handler) reviewKYC(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to review kyc"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, profile)
+}
+
+func (h *Handler) updateOperations(c *gin.Context) {
+	var request UpdateOperationsRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	profile, err := h.service.UpdateOperations(c.Request.Context(), middleware.CurrentUserID(c), middleware.CurrentUserRole(c), request)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrOnlyDriversCanUpdateOperations):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, ErrProfileNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update driver operations"})
 		}
 		return
 	}

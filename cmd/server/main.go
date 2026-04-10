@@ -14,6 +14,7 @@ import (
 	"github.com/asino-nelson/safiri-logistics/internal/auth"
 	"github.com/asino-nelson/safiri-logistics/internal/config"
 	"github.com/asino-nelson/safiri-logistics/internal/database"
+	"github.com/asino-nelson/safiri-logistics/internal/dispatch"
 	"github.com/asino-nelson/safiri-logistics/internal/driver"
 	"github.com/asino-nelson/safiri-logistics/internal/middleware"
 	"github.com/asino-nelson/safiri-logistics/internal/order"
@@ -48,7 +49,9 @@ func main() {
 	driverService := driver.NewService(driverRepository)
 	driverHandler := driver.NewHandler(driverService)
 	loadRepository := order.NewRepository(pool)
-	loadService := order.NewService(loadRepository, driverService)
+	dispatchService := dispatch.NewService(loadRepository, driverService, nil)
+	dispatchHandler := dispatch.NewHandler(dispatchService)
+	loadService := order.NewService(loadRepository, driverService, dispatchService)
 	loadHandler := order.NewHandler(loadService)
 	authMiddleware := middleware.Authenticate(tokenManager)
 
@@ -60,6 +63,7 @@ func main() {
 
 	api := router.Group("/api/v1")
 	authHandler.RegisterRoutes(api.Group("/auth"), authMiddleware)
+	dispatchHandler.RegisterRoutes(api, authMiddleware)
 	driverHandler.RegisterRoutes(api, authMiddleware)
 	loadHandler.RegisterRoutes(api, authMiddleware)
 

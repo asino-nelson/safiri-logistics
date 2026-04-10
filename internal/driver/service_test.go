@@ -33,6 +33,8 @@ func TestReviewKYCApprovesDriver(t *testing.T) {
 			LicenseNumber:     "DL-23456",
 			TruckRegistration: "KDA123A",
 			Status:            KYCStatusPending,
+			EquipmentType:     defaultEquipmentType,
+			IsAvailable:       true,
 		},
 	}
 	service := NewService(repo)
@@ -58,6 +60,41 @@ func TestReviewKYCApprovesDriver(t *testing.T) {
 	}
 }
 
+func TestUpdateOperationsStoresLocationAndCapacity(t *testing.T) {
+	t.Parallel()
+
+	lat := -1.286389
+	lng := 36.817223
+	repo := &stubRepository{
+		profile: &Profile{
+			UserID:            "driver-1",
+			NationalID:        "12345678",
+			LicenseNumber:     "DL-23456",
+			TruckRegistration: "KDA123A",
+			Status:            KYCStatusApproved,
+			EquipmentType:     defaultEquipmentType,
+		},
+	}
+
+	service := NewService(repo)
+	profile, err := service.UpdateOperations(context.Background(), "driver-1", user.RoleDriver, UpdateOperationsRequest{
+		YearsExperience: 8,
+		MaxLoadKG:       34000,
+		EquipmentType:   "lowbed",
+		IsOnline:        true,
+		IsAvailable:     true,
+		Latitude:        &lat,
+		Longitude:       &lng,
+	})
+	if err != nil {
+		t.Fatalf("update operations returned error: %v", err)
+	}
+
+	if !profile.IsOnline || profile.CurrentLatitude == nil || profile.MaxLoadKG != 34000 {
+		t.Fatalf("unexpected updated profile: %+v", profile)
+	}
+}
+
 type stubRepository struct {
 	profile *Profile
 }
@@ -75,4 +112,12 @@ func (r *stubRepository) GetByUserID(_ context.Context, _ string) (*Profile, err
 
 	clone := *r.profile
 	return &clone, nil
+}
+
+func (r *stubRepository) ListAvailableApproved(_ context.Context) ([]Profile, error) {
+	if r.profile == nil {
+		return nil, nil
+	}
+
+	return []Profile{*r.profile}, nil
 }

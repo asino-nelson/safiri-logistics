@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,6 +15,7 @@ type Repository interface {
 	Create(ctx context.Context, load *Load) error
 	ListByPosterID(ctx context.Context, posterID string) ([]Load, error)
 	ListAll(ctx context.Context) ([]Load, error)
+	ListUnassignedByPickupWindow(ctx context.Context, from, to time.Time) ([]Load, error)
 	GetByID(ctx context.Context, loadID string) (*Load, error)
 	Update(ctx context.Context, load *Load) error
 }
@@ -30,9 +32,18 @@ func (r *PostgresRepository) Create(ctx context.Context, load *Load) error {
 	query := `
 		INSERT INTO loads (
 			id, poster_id, assigned_driver_id, title, description, origin, destination,
-			weight_kg, status, created_at, updated_at, picked_at, delivered_at
+			weight_kg, status, pickup_latitude, pickup_longitude, dropoff_latitude,
+			dropoff_longitude, pickup_at, priority, cargo_type, equipment_type,
+			quoted_price_kes, matched_at, matching_score, assignment_source,
+			created_at, updated_at, picked_at, delivered_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), $10, $11)
+		VALUES (
+			$1, $2, $3, $4, $5, $6, $7,
+			$8, $9, $10, $11, $12,
+			$13, $14, $15, $16, $17,
+			$18, $19, $20, $21,
+			NOW(), NOW(), $22, $23
+		)
 	`
 
 	_, err := r.db.Exec(ctx, query,
@@ -45,6 +56,18 @@ func (r *PostgresRepository) Create(ctx context.Context, load *Load) error {
 		load.Destination,
 		load.WeightKG,
 		load.Status,
+		load.PickupLatitude,
+		load.PickupLongitude,
+		load.DropoffLatitude,
+		load.DropoffLongitude,
+		load.PickupAt,
+		load.Priority,
+		load.CargoType,
+		load.EquipmentType,
+		load.QuotedPriceKES,
+		load.MatchedAt,
+		load.MatchingScore,
+		load.AssignmentSource,
 		load.PickedAt,
 		load.DeliveredAt,
 	)
@@ -63,6 +86,22 @@ func (r *PostgresRepository) ListByPosterID(ctx context.Context, posterID string
 
 func (r *PostgresRepository) ListAll(ctx context.Context) ([]Load, error) {
 	rows, err := r.db.Query(ctx, baseLoadQuery()+" ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanLoads(rows)
+}
+
+func (r *PostgresRepository) ListUnassignedByPickupWindow(ctx context.Context, from, to time.Time) ([]Load, error) {
+	rows, err := r.db.Query(ctx, baseLoadQuery()+`
+		WHERE assigned_driver_id IS NULL
+		  AND pickup_at >= $1
+		  AND pickup_at < $2
+		  AND status = $3
+		ORDER BY priority DESC, pickup_at ASC, weight_kg DESC
+	`, from, to, StatusPosted)
 	if err != nil {
 		return nil, err
 	}
@@ -96,9 +135,21 @@ func (r *PostgresRepository) Update(ctx context.Context, load *Load) error {
 			destination = $6,
 			weight_kg = $7,
 			status = $8,
-			updated_at = $9,
-			picked_at = $10,
-			delivered_at = $11
+			pickup_latitude = $9,
+			pickup_longitude = $10,
+			dropoff_latitude = $11,
+			dropoff_longitude = $12,
+			pickup_at = $13,
+			priority = $14,
+			cargo_type = $15,
+			equipment_type = $16,
+			quoted_price_kes = $17,
+			matched_at = $18,
+			matching_score = $19,
+			assignment_source = $20,
+			updated_at = $21,
+			picked_at = $22,
+			delivered_at = $23
 		WHERE id = $1
 	`
 
@@ -111,6 +162,18 @@ func (r *PostgresRepository) Update(ctx context.Context, load *Load) error {
 		load.Destination,
 		load.WeightKG,
 		load.Status,
+		load.PickupLatitude,
+		load.PickupLongitude,
+		load.DropoffLatitude,
+		load.DropoffLongitude,
+		load.PickupAt,
+		load.Priority,
+		load.CargoType,
+		load.EquipmentType,
+		load.QuotedPriceKES,
+		load.MatchedAt,
+		load.MatchingScore,
+		load.AssignmentSource,
 		load.UpdatedAt,
 		load.PickedAt,
 		load.DeliveredAt,
@@ -142,6 +205,18 @@ func scanLoad(scanner loadScanner) (*Load, error) {
 		&load.Destination,
 		&load.WeightKG,
 		&load.Status,
+		&load.PickupLatitude,
+		&load.PickupLongitude,
+		&load.DropoffLatitude,
+		&load.DropoffLongitude,
+		&load.PickupAt,
+		&load.Priority,
+		&load.CargoType,
+		&load.EquipmentType,
+		&load.QuotedPriceKES,
+		&load.MatchedAt,
+		&load.MatchingScore,
+		&load.AssignmentSource,
 		&load.CreatedAt,
 		&load.UpdatedAt,
 		&load.PickedAt,
@@ -171,7 +246,10 @@ func scanLoads(rows pgx.Rows) ([]Load, error) {
 func baseLoadQuery() string {
 	return `
 		SELECT id, poster_id, assigned_driver_id, title, description, origin, destination,
-		       weight_kg, status, created_at, updated_at, picked_at, delivered_at
+		       weight_kg, status, pickup_latitude, pickup_longitude, dropoff_latitude,
+		       dropoff_longitude, pickup_at, priority, cargo_type, equipment_type,
+		       quoted_price_kes, matched_at, matching_score, assignment_source,
+		       created_at, updated_at, picked_at, delivered_at
 		FROM loads
 	`
 }
