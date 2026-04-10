@@ -250,14 +250,14 @@ func isEligible(load order.Load, candidate driver.Profile) bool {
 }
 
 func scoreCandidate(load order.Load, candidate driver.Profile) float64 {
-	distanceKM := haversineKM(load.PickupLatitude, load.PickupLongitude, *candidate.CurrentLatitude, *candidate.CurrentLongitude)
+	distanceKM := HaversineKM(load.PickupLatitude, load.PickupLongitude, *candidate.CurrentLatitude, *candidate.CurrentLongitude)
 	experiencePenalty := 10.0 / float64(candidate.YearsExperience+1)
 	priorityPenalty := float64(6 - load.Priority)
 
 	return distanceKM*0.65 + experiencePenalty*0.20 + priorityPenalty*0.15
 }
 
-func haversineKM(lat1, lon1, lat2, lon2 float64) float64 {
+func HaversineKM(lat1, lon1, lat2, lon2 float64) float64 {
 	const earthRadiusKM = 6371.0
 
 	dLat := radians(lat2 - lat1)

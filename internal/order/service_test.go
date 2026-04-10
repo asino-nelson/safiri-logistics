@@ -14,7 +14,7 @@ func TestCreateLoadAllowsCustomerAndAutoMatches(t *testing.T) {
 
 	repo := &stubRepository{}
 	matcher := &stubMatcher{matched: true}
-	service := NewService(repo, nil, matcher)
+	service := NewService(repo, nil, matcher, stubQuoteCalculator{amount: 120000})
 
 	now := time.Date(2026, 4, 11, 8, 0, 0, 0, time.UTC)
 	load, err := service.CreateLoad(context.Background(), "customer-1", user.RoleCustomer, CreateLoadRequest{
@@ -47,12 +47,16 @@ func TestCreateLoadAllowsCustomerAndAutoMatches(t *testing.T) {
 	if load.Priority != 5 || load.EquipmentType != "lowbed" {
 		t.Fatalf("unexpected load payload: %+v", load)
 	}
+
+	if load.QuotedPriceKES != 120000 {
+		t.Fatalf("expected quoted price, got %+v", load)
+	}
 }
 
 func TestCreateLoadRejectsDriver(t *testing.T) {
 	t.Parallel()
 
-	service := NewService(&stubRepository{}, nil, nil)
+	service := NewService(&stubRepository{}, nil, nil, nil)
 
 	_, err := service.CreateLoad(context.Background(), "driver-1", user.RoleDriver, CreateLoadRequest{
 		Title:            "Steel bars",
@@ -77,7 +81,7 @@ func TestListLoadsUsesRoleAwareFiltering(t *testing.T) {
 		posterLoads: []Load{{ID: "own-load"}},
 		allLoads:    []Load{{ID: "open-load"}, {ID: "own-load"}},
 	}
-	service := NewService(repo, nil, nil)
+	service := NewService(repo, nil, nil, nil)
 
 	customerLoads, err := service.ListLoads(context.Background(), "customer-1", user.RoleCustomer)
 	if err != nil {
@@ -109,7 +113,7 @@ func TestPickLoadRequiresApprovedKYC(t *testing.T) {
 		},
 	}
 
-	service := NewService(repo, stubKYCVerifier{approved: false}, nil)
+	service := NewService(repo, stubKYCVerifier{approved: false}, nil, nil)
 
 	_, err := service.PickLoad(context.Background(), "driver-1", user.RoleDriver, "load-1")
 	if !errors.Is(err, ErrDriverKYCRequired) {
@@ -130,7 +134,7 @@ func TestPickMatchedLoadOnlyAllowsAssignedDriver(t *testing.T) {
 		},
 	}
 
-	service := NewService(repo, stubKYCVerifier{approved: true}, nil)
+	service := NewService(repo, stubKYCVerifier{approved: true}, nil, nil)
 
 	_, err := service.PickLoad(context.Background(), "driver-2", user.RoleDriver, "load-1")
 	if !errors.Is(err, ErrLoadNotAvailable) {
@@ -149,7 +153,7 @@ func TestPickLoadAndProgressDelivery(t *testing.T) {
 		},
 	}
 
-	service := NewService(repo, stubKYCVerifier{approved: true}, nil)
+	service := NewService(repo, stubKYCVerifier{approved: true}, nil, nil)
 
 	picked, err := service.PickLoad(context.Background(), "driver-1", user.RoleDriver, "load-1")
 	if err != nil {
@@ -238,4 +242,12 @@ type stubMatcher struct {
 func (s *stubMatcher) MatchLoad(_ context.Context, loadID, _ string) (bool, error) {
 	s.lastLoadID = loadID
 	return s.matched, nil
+}
+
+type stubQuoteCalculator struct {
+	amount float64
+}
+
+func (s stubQuoteCalculator) Quote(Load) float64 {
+	return s.amount
 }

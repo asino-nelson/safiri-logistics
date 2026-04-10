@@ -18,6 +18,8 @@ import (
 	"github.com/asino-nelson/safiri-logistics/internal/driver"
 	"github.com/asino-nelson/safiri-logistics/internal/middleware"
 	"github.com/asino-nelson/safiri-logistics/internal/order"
+	"github.com/asino-nelson/safiri-logistics/internal/payment"
+	"github.com/asino-nelson/safiri-logistics/internal/pricing"
 	"github.com/asino-nelson/safiri-logistics/internal/tracking"
 	"github.com/asino-nelson/safiri-logistics/internal/user"
 )
@@ -52,8 +54,12 @@ func main() {
 	loadRepository := order.NewRepository(pool)
 	dispatchService := dispatch.NewService(loadRepository, driverService, nil)
 	dispatchHandler := dispatch.NewHandler(dispatchService)
-	loadService := order.NewService(loadRepository, driverService, dispatchService)
+	pricingService := pricing.NewService()
+	loadService := order.NewService(loadRepository, driverService, dispatchService, pricingService)
 	loadHandler := order.NewHandler(loadService)
+	paymentRepository := payment.NewRepository(pool)
+	paymentService := payment.NewService(paymentRepository, loadRepository, payment.NewSandboxMPESAClient())
+	paymentHandler := payment.NewHandler(paymentService)
 	trackingRepository := tracking.NewRepository(pool)
 	trackingService := tracking.NewService(trackingRepository, loadRepository, nil)
 	trackingHandler := tracking.NewHandler(trackingService)
@@ -70,6 +76,7 @@ func main() {
 	dispatchHandler.RegisterRoutes(api, authMiddleware)
 	driverHandler.RegisterRoutes(api, authMiddleware)
 	loadHandler.RegisterRoutes(api, authMiddleware)
+	paymentHandler.RegisterRoutes(api, authMiddleware)
 	trackingHandler.RegisterRoutes(api, authMiddleware)
 
 	server := &http.Server{

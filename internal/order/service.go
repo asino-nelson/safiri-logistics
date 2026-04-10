@@ -34,18 +34,24 @@ type AutoMatcher interface {
 	MatchLoad(ctx context.Context, loadID, source string) (bool, error)
 }
 
+type QuoteCalculator interface {
+	Quote(load Load) float64
+}
+
 type Service struct {
 	repo        Repository
 	kycVerifier KYCVerifier
 	autoMatcher AutoMatcher
+	quoteCalc   QuoteCalculator
 	nowFunc     func() time.Time
 }
 
-func NewService(repo Repository, kycVerifier KYCVerifier, autoMatcher AutoMatcher) *Service {
+func NewService(repo Repository, kycVerifier KYCVerifier, autoMatcher AutoMatcher, quoteCalc QuoteCalculator) *Service {
 	return &Service{
 		repo:        repo,
 		kycVerifier: kycVerifier,
 		autoMatcher: autoMatcher,
+		quoteCalc:   quoteCalc,
 		nowFunc:     time.Now,
 	}
 }
@@ -86,6 +92,9 @@ func (s *Service) CreateLoad(ctx context.Context, actorID, actorRole string, inp
 		AssignmentSource: "manual",
 		CreatedAt:        now,
 		UpdatedAt:        now,
+	}
+	if s.quoteCalc != nil {
+		load.QuotedPriceKES = s.quoteCalc.Quote(*load)
 	}
 
 	if err := s.repo.Create(ctx, load); err != nil {
