@@ -15,6 +15,7 @@ import (
 	"github.com/asino-nelson/safiri-logistics/internal/config"
 	"github.com/asino-nelson/safiri-logistics/internal/database"
 	"github.com/asino-nelson/safiri-logistics/internal/middleware"
+	"github.com/asino-nelson/safiri-logistics/internal/order"
 	"github.com/asino-nelson/safiri-logistics/internal/user"
 )
 
@@ -42,6 +43,9 @@ func main() {
 	tokenManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTTokenLifetime)
 	authService := auth.NewService(userRepository, auth.BcryptHasher{}, tokenManager)
 	authHandler := auth.NewHandler(authService, userService)
+	loadRepository := order.NewRepository(pool)
+	loadService := order.NewService(loadRepository)
+	loadHandler := order.NewHandler(loadService)
 	authMiddleware := middleware.Authenticate(tokenManager)
 
 	router := gin.New()
@@ -52,6 +56,7 @@ func main() {
 
 	api := router.Group("/api/v1")
 	authHandler.RegisterRoutes(api.Group("/auth"), authMiddleware)
+	loadHandler.RegisterRoutes(api, authMiddleware)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
