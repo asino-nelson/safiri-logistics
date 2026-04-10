@@ -14,6 +14,7 @@ import (
 	"github.com/asino-nelson/safiri-logistics/internal/auth"
 	"github.com/asino-nelson/safiri-logistics/internal/config"
 	"github.com/asino-nelson/safiri-logistics/internal/database"
+	"github.com/asino-nelson/safiri-logistics/internal/driver"
 	"github.com/asino-nelson/safiri-logistics/internal/middleware"
 	"github.com/asino-nelson/safiri-logistics/internal/order"
 	"github.com/asino-nelson/safiri-logistics/internal/user"
@@ -43,6 +44,9 @@ func main() {
 	tokenManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTTokenLifetime)
 	authService := auth.NewService(userRepository, auth.BcryptHasher{}, tokenManager)
 	authHandler := auth.NewHandler(authService, userService)
+	driverRepository := driver.NewRepository(pool)
+	driverService := driver.NewService(driverRepository)
+	driverHandler := driver.NewHandler(driverService)
 	loadRepository := order.NewRepository(pool)
 	loadService := order.NewService(loadRepository)
 	loadHandler := order.NewHandler(loadService)
@@ -56,6 +60,7 @@ func main() {
 
 	api := router.Group("/api/v1")
 	authHandler.RegisterRoutes(api.Group("/auth"), authMiddleware)
+	driverHandler.RegisterRoutes(api, authMiddleware)
 	loadHandler.RegisterRoutes(api, authMiddleware)
 
 	server := &http.Server{
