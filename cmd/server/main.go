@@ -1,12 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
-	"github.com/nelsonasino/safiri/internal/database"
+	"github.com/asino-nelson/safiri-logistics/internal/database"
 )
 
 func main() {
@@ -18,6 +19,16 @@ func main() {
 
 	// Connect DB
 	database.ConnectDB()
+
+	row := database.DB.QueryRow(context.Background(), "SELECT NOW()")
+
+	var timeNow string
+	err = row.Scan(&timeNow)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("DB Time:", timeNow)
 
 	router := gin.Default()
 

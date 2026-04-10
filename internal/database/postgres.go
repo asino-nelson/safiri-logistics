@@ -21,6 +21,7 @@ func ConnectDB() {
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
 	}
+	
 
 	// Test connection
 	if err := pool.Ping(ctx); err != nil {
@@ -28,5 +29,5 @@ func ConnectDB() {
 	}
 
 	DB = pool
-	log.Println("✅ Connected to PostgreSQL")
+	log.Println("-- Connected to PostgreSQL --")
 }
