@@ -11,8 +11,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
+	"github.com/asino-nelson/safiri-logistics/internal/auth"
 	"github.com/asino-nelson/safiri-logistics/internal/config"
 	"github.com/asino-nelson/safiri-logistics/internal/database"
+	"github.com/asino-nelson/safiri-logistics/internal/middleware"
+	"github.com/asino-nelson/safiri-logistics/internal/user"
 )
 
 func main() {
@@ -34,11 +37,21 @@ func main() {
 	}
 	defer pool.Close()
 
+	userRepository := user.NewRepository(pool)
+	userService := user.NewService(userRepository)
+	tokenManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTTokenLifetime)
+	authService := auth.NewService(userRepository, auth.BcryptHasher{}, tokenManager)
+	authHandler := auth.NewHandler(authService, userService)
+	authMiddleware := middleware.Authenticate(tokenManager)
+
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+
+	api := router.Group("/api/v1")
+	authHandler.RegisterRoutes(api.Group("/auth"), authMiddleware)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
