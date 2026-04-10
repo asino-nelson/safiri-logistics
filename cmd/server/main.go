@@ -48,7 +48,7 @@ func main() {
 	driverService := driver.NewService(driverRepository)
 	driverHandler := driver.NewHandler(driverService)
 	loadRepository := order.NewRepository(pool)
-	loadService := order.NewService(loadRepository)
+	loadService := order.NewService(loadRepository, driverService)
 	loadHandler := order.NewHandler(loadService)
 	authMiddleware := middleware.Authenticate(tokenManager)
 

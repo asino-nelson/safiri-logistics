@@ -11,17 +11,30 @@ import (
 	"github.com/asino-nelson/safiri-logistics/internal/user"
 )
 
-var ErrOnlyCustomersCanPostLoads = errors.New("only customers can post loads")
+var (
+	ErrOnlyCustomersCanPostLoads   = errors.New("only customers can post loads")
+	ErrOnlyDriversCanPickLoads     = errors.New("only drivers can pick loads")
+	ErrDriverKYCRequired           = errors.New("driver must have approved kyc before picking loads")
+	ErrLoadNotAvailable            = errors.New("load is not available for pickup")
+	ErrOnlyAssignedDriverCanUpdate = errors.New("only the assigned driver can update load status")
+	ErrInvalidLoadStatusTransition = errors.New("invalid load status transition")
+)
 
-type Service struct {
-	repo    Repository
-	nowFunc func() time.Time
+type KYCVerifier interface {
+	IsApproved(ctx context.Context, userID string) (bool, error)
 }
 
-func NewService(repo Repository) *Service {
+type Service struct {
+	repo        Repository
+	kycVerifier KYCVerifier
+	nowFunc     func() time.Time
+}
+
+func NewService(repo Repository, kycVerifier KYCVerifier) *Service {
 	return &Service{
-		repo:    repo,
-		nowFunc: time.Now,
+		repo:        repo,
+		kycVerifier: kycVerifier,
+		nowFunc:     time.Now,
 	}
 }
 
@@ -57,4 +70,88 @@ func (s *Service) ListLoads(ctx context.Context, actorID, actorRole string) ([]L
 	}
 
 	return s.repo.ListAll(ctx)
+}
+
+func (s *Service) PickLoad(ctx context.Context, actorID, actorRole, loadID string) (*Load, error) {
+	if actorRole != user.RoleDriver {
+		return nil, ErrOnlyDriversCanPickLoads
+	}
+
+	if s.kycVerifier == nil {
+		return nil, ErrDriverKYCRequired
+	}
+
+	approved, err := s.kycVerifier.IsApproved(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !approved {
+		return nil, ErrDriverKYCRequired
+	}
+
+	load, err := s.repo.GetByID(ctx, loadID)
+	if err != nil {
+		return nil, err
+	}
+
+	if load.Status != StatusPosted || load.AssignedDriverID != nil {
+		return nil, ErrLoadNotAvailable
+	}
+
+	now := s.nowFunc().UTC()
+	load.AssignedDriverID = &actorID
+	load.Status = StatusPicked
+	load.PickedAt = &now
+	load.UpdatedAt = now
+
+	if err := s.repo.Update(ctx, load); err != nil {
+		return nil, err
+	}
+
+	return load, nil
+}
+
+func (s *Service) UpdateLoadStatus(ctx context.Context, actorID, actorRole, loadID, newStatus string) (*Load, error) {
+	if actorRole != user.RoleDriver {
+		return nil, ErrOnlyAssignedDriverCanUpdate
+	}
+
+	load, err := s.repo.GetByID(ctx, loadID)
+	if err != nil {
+		return nil, err
+	}
+
+	if load.AssignedDriverID == nil || *load.AssignedDriverID != actorID {
+		return nil, ErrOnlyAssignedDriverCanUpdate
+	}
+
+	nextStatus := strings.ToLower(strings.TrimSpace(newStatus))
+	if !isValidTransition(load.Status, nextStatus) {
+		return nil, ErrInvalidLoadStatusTransition
+	}
+
+	now := s.nowFunc().UTC()
+	load.Status = nextStatus
+	load.UpdatedAt = now
+	if nextStatus == StatusDelivered {
+		load.DeliveredAt = &now
+	}
+
+	if err := s.repo.Update(ctx, load); err != nil {
+		return nil, err
+	}
+
+	return load, nil
+}
+
+func isValidTransition(current, next string) bool {
+	switch current {
+	case StatusPicked:
+		return next == StatusInTransit
+	case StatusInTransit:
+		return next == StatusDelivered
+	default:
+		return false
+	}
 }

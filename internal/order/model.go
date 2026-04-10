@@ -32,3 +32,7 @@ type CreateLoadRequest struct {
 	Destination string  `json:"destination" binding:"required"`
 	WeightKG    float64 `json:"weight_kg" binding:"required,gt=0"`
 }
+
+type UpdateLoadStatusRequest struct {
+	Status string `json:"status" binding:"required"`
+}

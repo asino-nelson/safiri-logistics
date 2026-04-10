@@ -22,6 +22,8 @@ func (h *Handler) RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.Han
 	loads.Use(authMiddleware)
 	loads.POST("", h.create)
 	loads.GET("", h.list)
+	loads.POST("/:loadID/pick", h.pick)
+	loads.PATCH("/:loadID/status", h.updateStatus)
 }
 
 func (h *Handler) create(c *gin.Context) {
@@ -53,4 +55,54 @@ func (h *Handler) list(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": loads})
+}
+
+func (h *Handler) pick(c *gin.Context) {
+	load, err := h.service.PickLoad(c.Request.Context(), middleware.CurrentUserID(c), middleware.CurrentUserRole(c), c.Param("loadID"))
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrOnlyDriversCanPickLoads), errors.Is(err, ErrDriverKYCRequired):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, ErrLoadNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, ErrLoadNotAvailable):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to pick load"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, load)
+}
+
+func (h *Handler) updateStatus(c *gin.Context) {
+	var request UpdateLoadStatusRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	load, err := h.service.UpdateLoadStatus(
+		c.Request.Context(),
+		middleware.CurrentUserID(c),
+		middleware.CurrentUserRole(c),
+		c.Param("loadID"),
+		request.Status,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrOnlyAssignedDriverCanUpdate):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, ErrLoadNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, ErrInvalidLoadStatusTransition):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update load status"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, load)
 }
