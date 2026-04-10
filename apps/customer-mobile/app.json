@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Safiri Customer",
+    "slug": "safiri-customer",
+    "scheme": "safiri-customer",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
