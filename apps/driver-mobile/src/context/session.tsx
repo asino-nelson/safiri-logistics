@@ -52,7 +52,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const parsedUser = JSON.parse(storedUser) as AuthUser;
+        let parsedUser: AuthUser;
+        try {
+          parsedUser = JSON.parse(storedUser) as AuthUser;
+        } catch {
+          await AsyncStorage.multiRemove([storageKeys.token, storageKeys.user]);
+          setReady(true);
+          return;
+        }
         if (parsedUser.role !== "driver") {
           await AsyncStorage.multiRemove([storageKeys.token, storageKeys.user]);
           setReady(true);

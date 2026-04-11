@@ -56,7 +56,7 @@ export default function CreateLoadScreen() {
         cargo_type: form.cargo_type,
         equipment_type: form.equipment_type,
       });
-      router.replace({ pathname: "/loads/[id]", params: { id: load.id } });
+      router.replace(`/loads/${load.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create load");
     } finally {

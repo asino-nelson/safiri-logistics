@@ -15,7 +15,7 @@ export function StatusPill({ status }: { status: string }) {
 
   return (
     <View style={[styles.pill, { backgroundColor: theme.backgroundColor }]}>
-      <Text style={[styles.text, { color: theme.color }]}>{status.replaceAll("_", " ")}</Text>
+      <Text style={[styles.text, { color: theme.color }]}>{status.split("_").join(" ")}</Text>
     </View>
   );
 }

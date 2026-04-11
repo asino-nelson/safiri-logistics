@@ -6,6 +6,7 @@ import { ActionButton } from "../../src/components/ActionButton";
 import { BrandHeader } from "../../src/components/BrandHeader";
 import { Screen } from "../../src/components/Screen";
 import { useAuth } from "../../src/context/auth";
+import { apiUrl } from "../../src/lib/env";
 
 export default function ProfileScreen() {
   const { session, signOut, refreshProfile } = useAuth();
@@ -27,7 +28,7 @@ export default function ProfileScreen() {
         <InfoCard label="Name" value={session?.user.name || "-"} />
         <InfoCard label="Email" value={session?.user.email || "-"} />
         <InfoCard label="Role" value={session?.user.role || "-"} />
-        <InfoCard label="API base" value="http://localhost:8080/api/v1" />
+        <InfoCard label="API base" value={apiUrl} />
       </View>
 
       <View style={{ gap: 12, marginTop: 18 }}>

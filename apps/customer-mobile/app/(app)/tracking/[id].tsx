@@ -90,14 +90,14 @@ export default function TrackingScreen() {
         <Text style={{ color: "#64748B", textTransform: "uppercase", letterSpacing: 0.8, fontSize: 12 }}>Connection</Text>
         <Text style={{ color: "#0F172A", fontSize: 18, fontWeight: "800" }}>{connectionState}</Text>
         <Text style={{ color: "#64748B" }}>
-          If you are on a device and localhost is not reachable, point `EXPO_PUBLIC_WS_URL` to your machine IP.
+          If you are on a device and localhost is not reachable, point EXPO_PUBLIC_WS_URL to your machine IP.
         </Text>
       </View>
 
       <View style={{ gap: 14, marginTop: 16 }}>
         <Row label="Latest position" value={latest ? `${latest.latitude.toFixed(5)}, ${latest.longitude.toFixed(5)}` : "Waiting for updates"} />
         <Row label="Speed" value={latest ? `${latest.speed_kph.toFixed(1)} kph` : "-"} />
-        <Row label="Heading" value={latest ? `${latest.heading_degrees.toFixed(1)}°` : "-"} />
+        <Row label="Heading" value={latest ? `${latest.heading_degrees.toFixed(1)} deg` : "-"} />
         <Row label="Recorded at" value={latest ? new Date(latest.recorded_at).toLocaleString() : "-"} />
       </View>
 
@@ -111,7 +111,7 @@ export default function TrackingScreen() {
                 {event.latitude.toFixed(5)}, {event.longitude.toFixed(5)}
               </Text>
               <Text style={{ color: "#64748B" }}>
-                Speed {event.speed_kph.toFixed(1)} kph, heading {event.heading_degrees.toFixed(1)}°
+                Speed {event.speed_kph.toFixed(1)} kph, heading {event.heading_degrees.toFixed(1)} deg
               </Text>
             </View>
           ))}

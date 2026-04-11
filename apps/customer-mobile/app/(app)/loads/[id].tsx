@@ -54,7 +54,7 @@ export default function LoadDetailScreen() {
       {load ? (
         <View style={{ gap: 14 }}>
           <LoadCard load={load} compact />
-          <DetailRow label="Route" value={`${load.origin} → ${load.destination}`} />
+          <DetailRow label="Route" value={`${load.origin} -> ${load.destination}`} />
           <DetailRow label="Cargo" value={`${load.cargo_type} | ${load.equipment_type}`} />
           <DetailRow label="Weight" value={`${load.weight_kg.toLocaleString()} kg`} />
           <DetailRow label="Priority" value={String(load.priority)} />
@@ -65,8 +65,8 @@ export default function LoadDetailScreen() {
 
           <SectionTitle title="Actions" subtitle="Track the shipment or trigger payment once the quote is ready." />
           <View style={{ gap: 12 }}>
-            <ActionButton title="Open tracking" onPress={() => router.push({ pathname: "/tracking/[id]", params: { id: load.id } })} />
-            <ActionButton title="Initiate payment" variant="secondary" onPress={() => router.push({ pathname: "/payments/[id]", params: { id: load.id } })} />
+            <ActionButton title="Open tracking" onPress={() => router.push(`/tracking/${load.id}`)} />
+            <ActionButton title="Initiate payment" variant="secondary" onPress={() => router.push(`/payments/${load.id}`)} />
             <ActionButton title="Refresh" variant="ghost" onPress={fetchLoad} />
           </View>
         </View>

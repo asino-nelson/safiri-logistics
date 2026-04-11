@@ -80,7 +80,7 @@ export default function DashboardScreen() {
 
       <View style={{ gap: 14 }}>
         {recentLoads.map((load) => (
-          <LoadCard key={load.id} load={load} onPress={() => router.push({ pathname: "/loads/[id]", params: { id: load.id } })} />
+          <LoadCard key={load.id} load={load} onPress={() => router.push(`/loads/${load.id}`)} />
         ))}
         {!loading && !error && recentLoads.length === 0 ? (
           <Text style={{ color: "#64748B" }}>No loads yet. Create the first heavy-goods shipment.</Text>

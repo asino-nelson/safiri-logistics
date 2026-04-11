@@ -13,15 +13,38 @@ export function LoadCard({
   onPress?: () => void;
   compact?: boolean;
 }) {
-  const Container = onPress ? Pressable : View;
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} style={styles.card}>
+        <View style={styles.topRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>{load.title}</Text>
+            <Text style={styles.route}>
+              {load.origin} -> {load.destination}
+            </Text>
+          </View>
+          <StatusPill status={load.status} />
+        </View>
+
+        <Text style={styles.body} numberOfLines={compact ? 2 : 4}>
+          {load.description}
+        </Text>
+
+        <View style={styles.metaRow}>
+          <Text style={styles.meta}>Priority {load.priority}</Text>
+          <Text style={styles.meta}>KES {load.quoted_price_kes.toLocaleString()}</Text>
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
-    <Container onPress={onPress as never} style={styles.card as never}>
+    <View style={styles.card}>
       <View style={styles.topRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{load.title}</Text>
           <Text style={styles.route}>
-            {load.origin} → {load.destination}
+            {load.origin} -> {load.destination}
           </Text>
         </View>
         <StatusPill status={load.status} />
@@ -35,7 +58,7 @@ export function LoadCard({
         <Text style={styles.meta}>Priority {load.priority}</Text>
         <Text style={styles.meta}>KES {load.quoted_price_kes.toLocaleString()}</Text>
       </View>
-    </Container>
+    </View>
   );
 }
 
