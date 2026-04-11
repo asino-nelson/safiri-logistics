@@ -1,3 +1,4 @@
 .env
 /apps/node_modules
 /apps/customer-mobile/.expo
+/apps
